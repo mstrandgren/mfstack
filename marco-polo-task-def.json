@@ -1,0 +1,21 @@
+{
+	"family": "marco-polo",
+	"containerDefinitions": [
+		{
+			"name": "marco-polo",
+			"image": "mstrandgren/marcopolo",
+			"memory": 512,
+			"portMappings": [
+				{
+					"containerPort": 8000,
+					"hostPort": 8000
+				},
+				{
+					"containerPort": 8080,
+					"hostPort": 8080
+				}
+			],
+			"essential": true
+		}
+	]
+}
