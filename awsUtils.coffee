@@ -24,9 +24,41 @@ wrapAPI = (original) ->
 
 ec2 = wrapAPI(new AWS.EC2())
 s3 = wrapAPI(new AWS.S3())
+cf = wrapAPI(new AWS.CloudFormation())
 
 module.exports = {
 	ec2
 	s3
+	cf
 }
 
+
+
+###
+
+Create vpc
+Create subnets (for each availabilityzone)
+Create IAM roles
+ - for instances
+ - for services
+Create security group for ELB
+Create security group for cluster
+Create cluster
+Create task definition
+Create service
+
+Create s3 bucket for frontend
+Create s3 bucket for logging
+
+
+Create ELB
+ - needs subnet
+ - needs ELB security group
+Create launch config for cluster AG
+ - needs an IAM role
+ - needs security group
+Create autoscaling group for cluster
+ - needs VPCZoneIdentifier
+ - needs launch config
+
+###
