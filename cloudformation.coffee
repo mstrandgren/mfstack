@@ -22,11 +22,11 @@ run = ->
 			Resource : '*'
 		]
 
-	cf.updateStack
+	cf.createStack
 		Capabilities: ['CAPABILITY_IAM']
 
 		StackName: 'test-stack-4'
-		StackPolicyDuringUpdateBody: JSON.stringify(stackPolicy)
+		# StackPolicyDuringUpdateBody: JSON.stringify(stackPolicy)
 		TemplateBody: JSON.stringify(template)
 
 	.then (data) ->
@@ -87,11 +87,12 @@ createTemplate = ->
 		ClusterAutoScalingGroup: autoScalingGroup
 			launchConfiguration: 'ClusterLaunchConfiguration'
 			loadBalancers: ['Elb']
+			subnets: _.keys(_subnets)
 
 	return {Resources}
 
 
-autoScalingGroup = ({launchConfiguration, loadBalancers}) ->
+autoScalingGroup = ({launchConfiguration, loadBalancers, subnets}) ->
 	Type: 'AWS::AutoScaling::AutoScalingGroup'
 	Properties:
 		AvailabilityZones: AVAILABILITY_ZONES
@@ -104,17 +105,18 @@ autoScalingGroup = ({launchConfiguration, loadBalancers}) ->
 		HealthCheckGracePeriod: 300
 		HealthCheckType: 'ELB'
 		Cooldown: 300
-
+		VPCZoneIdentifier: ({Ref: subnet} for subnet in subnets)
+	DependsOn: subnets.concat(loadBalancers).concat([launchConfiguration])
 
 launchConfiguration = ({role, securityGroups}) ->
 	Type: 'AWS::AutoScaling::LaunchConfiguration'
 	Properties:
 		ImageId: 'ami-3fa4de48'
 		InstanceType: 't2.micro'
-		IamInstanceProfile: {Ref:role}
+		IamInstanceProfile: 'ecsInstanceRole'
 		InstanceMonitoring: true
 		SecurityGroups: ({Ref: sg} for sg in securityGroups)
-
+	DependsOn: securityGroups.concat([role])
 
 
 elb = ({subnets, securityGroups}) ->
@@ -143,6 +145,7 @@ elb = ({subnets, securityGroups}) ->
 			Enabled: true
 			Timeout: 300
 		CrossZone: true
+	DependsOn: subnets.concat(securityGroups)
 
 		# HealthCheck:
 		# 	HealthyThreshold: 10
@@ -223,7 +226,7 @@ role =
 				]
 			Path: '/'
 			ManagedPolicyArns: [
-				'arn:aws:iam::aws:policy/AmazonEC2FullAccess'
+				'arn:aws:iam::aws:policy/service-role/AmazonEC2ContainerServiceforEC2Role'
 			]
 
 	service: ->
@@ -239,7 +242,8 @@ role =
 				]
 			Path: '/'
 			ManagedPolicyArns: [
-				'arn:aws:iam::aws:policy/AmazonEC2ContainerServiceFullAccess'
+				'arn:aws:iam::aws:policy/service-role/AmazonEC2ContainerServiceRole'
+				# 'arn:aws:iam::aws:policy/AmazonEC2ContainerServiceFullAccess'
 			]
 
 
@@ -250,6 +254,7 @@ subnet = (vpcId, availabilityZone, cidrBlock) ->
 		CidrBlock: cidrBlock
 		AvailabilityZone: availabilityZone
 		VpcId: { Ref: 'Vpc'}
+	DependsOn: ['Vpc', 'Igw', 'IgwAttachment']
 
 subnets = ->
 	subnets = {}
