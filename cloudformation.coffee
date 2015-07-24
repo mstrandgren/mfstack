@@ -7,6 +7,12 @@ Promise = require('promise')
 AWS_UID = '066341227319'
 AVAILABILITY_ZONES = ['eu-west-1a', 'eu-west-1b', 'eu-west-1c']
 
+vpcId = 'vpc-a3a929c6'
+subnetIds = [
+	'subnet-9b7bc4c2'
+	'subnet-e0433e85'
+	'subnet-e57b1e92'
+]
 
 run = ->
 	console.log 'Creating stack...'
@@ -58,10 +64,10 @@ createTemplate = ->
 	_subnets = subnets()
 
 	Resources = _.extend {},
-		vpc()
-	,
-		_subnets
-	,
+	# 	vpc()
+	# ,
+	# 	_subnets
+	# ,
 		ExternalSecurityGroup: securityGroup.external()
 		InternalSecurityGroup: securityGroup.internal('ExternalSecurityGroup')
 		InstanceRole: role.instance()
@@ -70,15 +76,15 @@ createTemplate = ->
 			subnets: _.keys(_subnets)
 			securityGroups: ['ExternalSecurityGroup', 'InternalSecurityGroup']
 
-		EcsCluster: cluster()
-		MarcoPoloTask: taskDefinition('marco-polo', 'mstrandgren/marcopolo')
-		MarcoPoloService: service
-			cluster: 'EcsCluster'
-			count: 1
-			loadBalancer: 'Elb'
-			containerName: 'marco-polo'
-			role: 'ServiceRole'
-			taskDefinition: 'MarcoPoloTask'
+		# EcsCluster: cluster()
+		# MarcoPoloTask: taskDefinition('marco-polo', 'mstrandgren/marcopolo')
+		# MarcoPoloService: service
+		# 	cluster: 'EcsCluster'
+		# 	count: 1
+		# 	loadBalancer: 'Elb'
+		# 	containerName: 'marco-polo'
+		# 	role: 'ServiceRole'
+		# 	taskDefinition: 'MarcoPoloTask'
 
 		ClusterLaunchConfiguration: launchConfiguration
 			role: 'InstanceRole'
@@ -102,11 +108,11 @@ autoScalingGroup = ({launchConfiguration, loadBalancers, subnets}) ->
 		LaunchConfigurationName: {Ref: launchConfiguration}
 		LoadBalancerNames: ({Ref: lb} for lb in loadBalancers)
 
-		HealthCheckGracePeriod: 300
-		HealthCheckType: 'ELB'
+		HealthCheckGracePeriod: 30
+		HealthCheckType: 'EC2'
 		Cooldown: 300
-		VPCZoneIdentifier: ({Ref: subnet} for subnet in subnets)
-	DependsOn: subnets.concat(loadBalancers).concat([launchConfiguration])
+		VPCZoneIdentifier: subnetIds # ({Ref: subnet} for subnet in subnets)
+	# DependsOn: subnets.concat(loadBalancers).concat([launchConfiguration])
 
 launchConfiguration = ({role, securityGroups}) ->
 	Type: 'AWS::AutoScaling::LaunchConfiguration'
@@ -131,7 +137,7 @@ elb = ({subnets, securityGroups}) ->
 			]
 			InstancePorts: [80]
 		]
-		Subnets: ({Ref: subnet} for subnet in subnets)
+		Subnets: subnetIds # ({Ref: subnet} for subnet in subnets)
 		SecurityGroups: ({Ref: sg} for sg in securityGroups)
 		Listeners: [
 			InstancePort: 80
@@ -145,7 +151,7 @@ elb = ({subnets, securityGroups}) ->
 			Enabled: true
 			Timeout: 300
 		CrossZone: true
-	DependsOn: subnets.concat(securityGroups)
+	# DependsOn: subnets.concat(securityGroups)
 
 		# HealthCheck:
 		# 	HealthyThreshold: 10
@@ -197,7 +203,7 @@ securityGroup =
 				CidrIp: '0.0.0.0/0'
 				IpProtocol: '-1'
 			]
-			VpcId: { Ref: 'Vpc'}
+			VpcId: vpcId # { Ref: 'Vpc'}
 
 
 	internal: (externalSecurityGroup, fromPort = 80, toPort = 80) ->
@@ -210,7 +216,7 @@ securityGroup =
 				FromPort: fromPort
 				ToPort: toPort
 			]
-			VpcId: { Ref: 'Vpc'}
+			VpcId: vpcId # { Ref: 'Vpc'}
 
 role =
 	instance: ->
