@@ -70,8 +70,11 @@ createTemplate = ->
 	# ,
 		ExternalSecurityGroup: securityGroup.external()
 		InternalSecurityGroup: securityGroup.internal('ExternalSecurityGroup')
-		InstanceRole: role.instance()
-		ServiceRole: role.service()
+
+		InstanceRole: iam.instanceRole()
+		InstanceProfile: iam.profile('InstanceRole')
+		ServiceRole: iam.serviceRole()
+
 		Elb: elb
 			subnets: _.keys(_subnets)
 			securityGroups: ['ExternalSecurityGroup', 'InternalSecurityGroup']
@@ -79,7 +82,7 @@ createTemplate = ->
 		EcsCluster: cluster()
 
 		ClusterLaunchConfiguration: launchConfiguration
-			role: 'InstanceRole'
+			profile: 'InstanceProfile'
 			securityGroups: ['InternalSecurityGroup']
 			cluster: 'EcsCluster'
 
@@ -106,7 +109,6 @@ createTemplate = ->
 autoScalingGroup = ({launchConfiguration, loadBalancers, subnets}) ->
 	Type: 'AWS::AutoScaling::AutoScalingGroup'
 	Properties:
-		# AvailabilityZones: AVAILABILITY_ZONES
 		MaxSize: 1
 		MinSize: 1
 		DesiredCapacity: 1
@@ -115,17 +117,17 @@ autoScalingGroup = ({launchConfiguration, loadBalancers, subnets}) ->
 		LoadBalancerNames: ({Ref: lb} for lb in loadBalancers)
 		VPCZoneIdentifier: subnetIds # ({Ref: subnet} for subnet in subnets)
 
-		HealthCheckGracePeriod: 30
+		HealthCheckGracePeriod: 300
 		HealthCheckType: 'EC2'
 		Cooldown: 300
 	# DependsOn: subnets.concat(loadBalancers).concat([launchConfiguration])
 
-launchConfiguration = ({role, securityGroups, cluster}) ->
+launchConfiguration = ({profile, securityGroups, cluster}) ->
 	Type: 'AWS::AutoScaling::LaunchConfiguration'
 	Properties:
 		ImageId: 'ami-3db4ca4a'
 		InstanceType: 't2.micro'
-		IamInstanceProfile: 'ecsInstanceRole'
+		IamInstanceProfile: {Ref: profile}
 		InstanceMonitoring: true
 		SecurityGroups: ({Ref: sg} for sg in securityGroups)
 
@@ -137,7 +139,7 @@ launchConfiguration = ({role, securityGroups, cluster}) ->
 					{Ref: cluster}
 					" >> /etc/ecs/ecs.config"
 				]]
-	DependsOn: securityGroups.concat([role]).concat([cluster])
+	# DependsOn: securityGroups.concat([profile]).concat([cluster])
 
 
 elb = ({subnets, securityGroups}) ->
@@ -235,8 +237,8 @@ securityGroup =
 			]
 			VpcId: vpcId # { Ref: 'Vpc'}
 
-role =
-	instance: ->
+iam =
+	instanceRole: ->
 		Type: 'AWS::IAM::Role',
 		Properties:
 			AssumeRolePolicyDocument:
@@ -252,7 +254,13 @@ role =
 				'arn:aws:iam::aws:policy/service-role/AmazonEC2ContainerServiceforEC2Role'
 			]
 
-	service: ->
+	profile: (role) ->
+		Type: 'AWS::IAM::InstanceProfile'
+		Properties:
+			Path: '/'
+			Roles: [{Ref: role}]
+
+	serviceRole: ->
 		Type: 'AWS::IAM::Role',
 		Properties:
 			AssumeRolePolicyDocument:
