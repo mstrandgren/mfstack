@@ -55,6 +55,7 @@
     "ECSCluster": {
       "Type": "AWS::ECS::Cluster"
     },
+
     "taskdefinition": {
       "Type": "AWS::ECS::TaskDefinition",
       "Properties" : {

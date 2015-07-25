@@ -77,14 +77,6 @@ createTemplate = ->
 			securityGroups: ['ExternalSecurityGroup', 'InternalSecurityGroup']
 
 		EcsCluster: cluster()
-		# MarcoPoloTask: taskDefinition('marco-polo', 'mstrandgren/marcopolo')
-		# MarcoPoloService: service
-		# 	cluster: 'EcsCluster'
-		# 	count: 1
-		# 	loadBalancer: 'Elb'
-		# 	containerName: 'marco-polo'
-		# 	role: 'ServiceRole'
-		# 	taskDefinition: 'MarcoPoloTask'
 
 		ClusterLaunchConfiguration: launchConfiguration
 			role: 'InstanceRole'
@@ -95,6 +87,18 @@ createTemplate = ->
 			launchConfiguration: 'ClusterLaunchConfiguration'
 			loadBalancers: ['Elb']
 			subnets: _.keys(_subnets)
+
+
+		MarcoPoloTask: taskDefinition('marco-polo', 'mstrandgren/marcopolo')
+		MarcoPoloService: service
+			autoScalingGroup: 'ClusterAutoScalingGroup'
+			cluster: 'EcsCluster'
+			count: 1
+			loadBalancer: 'Elb'
+			containerName: 'marco-polo'
+			role: 'ServiceRole'
+			taskDefinition: 'MarcoPoloTask'
+
 
 	return {Resources}
 
@@ -119,15 +123,11 @@ autoScalingGroup = ({launchConfiguration, loadBalancers, subnets}) ->
 launchConfiguration = ({role, securityGroups, cluster}) ->
 	Type: 'AWS::AutoScaling::LaunchConfiguration'
 	Properties:
-		ImageId: 'ami-3fa4de48'
+		ImageId: 'ami-3db4ca4a'
 		InstanceType: 't2.micro'
 		IamInstanceProfile: 'ecsInstanceRole'
 		InstanceMonitoring: true
 		SecurityGroups: ({Ref: sg} for sg in securityGroups)
-		# UserData: new Buffer("""
-		# 	#!/bin/bash
-		# 	echo ECS_CLUSTER=test-EcsCl-81SKS9UR39JM >> /etc/ecs/ecs.config
-		# """).toString('base64')
 
 		UserData:
 			'Fn::Base64':
@@ -178,18 +178,20 @@ elb = ({subnets, securityGroups}) ->
 
 
 
-service = ({cluster, count, containerName, loadBalancer, role, taskDefinition}) ->
+service = ({autoScalingGroup, cluster, count, containerName, loadBalancer, role, taskDefinition}) ->
 	Type: 'AWS::ECS::Service'
+	DependsOn: [autoScalingGroup]
 	Properties:
 		Cluster: { Ref: cluster }
 		DesiredCount: count
 		LoadBalancers: [
-			ContainerPort: 8000
 			ContainerName: containerName
+			ContainerPort: 8000
 			LoadBalancerName: {Ref: loadBalancer}
 		]
 		Role: {Ref: role}
 		TaskDefinition: {Ref: taskDefinition}
+
 
 taskDefinition = (name, image) ->
 	Type: 'AWS::ECS::TaskDefinition'
