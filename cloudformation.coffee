@@ -76,7 +76,7 @@ createTemplate = ->
 			subnets: _.keys(_subnets)
 			securityGroups: ['ExternalSecurityGroup', 'InternalSecurityGroup']
 
-		# EcsCluster: cluster()
+		EcsCluster: cluster()
 		# MarcoPoloTask: taskDefinition('marco-polo', 'mstrandgren/marcopolo')
 		# MarcoPoloService: service
 		# 	cluster: 'EcsCluster'
@@ -89,6 +89,7 @@ createTemplate = ->
 		ClusterLaunchConfiguration: launchConfiguration
 			role: 'InstanceRole'
 			securityGroups: ['InternalSecurityGroup']
+			cluster: 'EcsCluster'
 
 		ClusterAutoScalingGroup: autoScalingGroup
 			launchConfiguration: 'ClusterLaunchConfiguration'
@@ -101,20 +102,21 @@ createTemplate = ->
 autoScalingGroup = ({launchConfiguration, loadBalancers, subnets}) ->
 	Type: 'AWS::AutoScaling::AutoScalingGroup'
 	Properties:
-		AvailabilityZones: AVAILABILITY_ZONES
+		# AvailabilityZones: AVAILABILITY_ZONES
 		MaxSize: 1
 		MinSize: 1
+		DesiredCapacity: 1
 
 		LaunchConfigurationName: {Ref: launchConfiguration}
 		LoadBalancerNames: ({Ref: lb} for lb in loadBalancers)
+		VPCZoneIdentifier: subnetIds # ({Ref: subnet} for subnet in subnets)
 
 		HealthCheckGracePeriod: 30
 		HealthCheckType: 'EC2'
 		Cooldown: 300
-		VPCZoneIdentifier: subnetIds # ({Ref: subnet} for subnet in subnets)
 	# DependsOn: subnets.concat(loadBalancers).concat([launchConfiguration])
 
-launchConfiguration = ({role, securityGroups}) ->
+launchConfiguration = ({role, securityGroups, cluster}) ->
 	Type: 'AWS::AutoScaling::LaunchConfiguration'
 	Properties:
 		ImageId: 'ami-3fa4de48'
@@ -122,7 +124,20 @@ launchConfiguration = ({role, securityGroups}) ->
 		IamInstanceProfile: 'ecsInstanceRole'
 		InstanceMonitoring: true
 		SecurityGroups: ({Ref: sg} for sg in securityGroups)
-	DependsOn: securityGroups.concat([role])
+		# UserData: new Buffer("""
+		# 	#!/bin/bash
+		# 	echo ECS_CLUSTER=test-EcsCl-81SKS9UR39JM >> /etc/ecs/ecs.config
+		# """).toString('base64')
+
+		UserData:
+			'Fn::Base64':
+				'Fn::Join': ["", [
+					"#!/bin/bash\n"
+					"echo ECS_CLUSTER="
+					{Ref: cluster}
+					" >> /etc/ecs/ecs.config"
+				]]
+	DependsOn: securityGroups.concat([role]).concat([cluster])
 
 
 elb = ({subnets, securityGroups}) ->
@@ -137,7 +152,7 @@ elb = ({subnets, securityGroups}) ->
 			]
 			InstancePorts: [80]
 		]
-		Subnets: subnetIds # ({Ref: subnet} for subnet in subnets)
+		Subnets: subnetIds #({Ref: subnet} for subnet in subnets)
 		SecurityGroups: ({Ref: sg} for sg in securityGroups)
 		Listeners: [
 			InstancePort: 80
@@ -145,12 +160,12 @@ elb = ({subnets, securityGroups}) ->
 			Protocol: 'tcp'
 			InstanceProtocol: 'tcp'
 		]
-		ConnectionSettings:
-			IdleTimeout: 3600
-		ConnectionDrainingPolicy:
-			Enabled: true
-			Timeout: 300
-		CrossZone: true
+		# ConnectionSettings:
+		# 	IdleTimeout: 3600
+		# ConnectionDrainingPolicy:
+		# 	Enabled: true
+		# 	Timeout: 300
+		# CrossZone: true
 	# DependsOn: subnets.concat(securityGroups)
 
 		# HealthCheck:
@@ -180,10 +195,10 @@ taskDefinition = (name, image) ->
 	Type: 'AWS::ECS::TaskDefinition'
 	Properties:
 		ContainerDefinitions: [
+			Name: name
 			Cpu: 1024,
 			Image: image
 			Memory: 512
-			Name: name
 			PortMappings: [
 				HostPort: 80
 				ContainerPort: 8000
