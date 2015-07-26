@@ -8,11 +8,10 @@ AWS_UID = '066341227319'
 AVAILABILITY_ZONES = ['eu-west-1a', 'eu-west-1b', 'eu-west-1c']
 
 vpcId = 'vpc-a3a929c6'
-subnetIds = [
-	'subnet-9b7bc4c2'
-	'subnet-e0433e85'
-	'subnet-e57b1e92'
-]
+# subnetIds =
+# 	sub1: 'subnet-9b7bc4c2'
+# 	sub2: 'subnet-e0433e85'
+# 	sub3: 'subnet-e57b1e92'
 
 run = ->
 	console.log 'Creating stack...'
@@ -62,12 +61,15 @@ run = ->
 createTemplate = ->
 
 	_subnets = subnets()
+	subnetIds = _.keys(_subnets)
 
 	Resources = _.extend {},
-	# 	vpc()
-	# ,
-	# 	_subnets
-	# ,
+		vpc()
+	,
+		_subnets
+	,
+		routeTableAssocs(subnetIds)
+	,
 		ExternalSecurityGroup: securityGroup.external()
 		InternalSecurityGroup: securityGroup.internal('ExternalSecurityGroup')
 
@@ -76,8 +78,8 @@ createTemplate = ->
 		ServiceRole: iam.serviceRole()
 
 		Elb: elb
-			subnets: _.keys(_subnets)
-			securityGroups: ['ExternalSecurityGroup', 'InternalSecurityGroup']
+			subnets: subnetIds
+			securityGroups: ['ExternalSecurityGroup']
 
 		EcsCluster: cluster()
 
@@ -89,7 +91,7 @@ createTemplate = ->
 		ClusterAutoScalingGroup: autoScalingGroup
 			launchConfiguration: 'ClusterLaunchConfiguration'
 			loadBalancers: ['Elb']
-			subnets: _.keys(_subnets)
+			subnets: subnetIds
 
 
 		MarcoPoloTask: taskDefinition('marco-polo', 'mstrandgren/marcopolo')
@@ -103,7 +105,9 @@ createTemplate = ->
 			taskDefinition: 'MarcoPoloTask'
 
 
-	return {Resources}
+	return {
+		Resources
+	}
 
 
 autoScalingGroup = ({launchConfiguration, loadBalancers, subnets}) ->
@@ -115,7 +119,7 @@ autoScalingGroup = ({launchConfiguration, loadBalancers, subnets}) ->
 
 		LaunchConfigurationName: {Ref: launchConfiguration}
 		LoadBalancerNames: ({Ref: lb} for lb in loadBalancers)
-		VPCZoneIdentifier: subnetIds # ({Ref: subnet} for subnet in subnets)
+		VPCZoneIdentifier: ({Ref: subnet} for subnet in subnets)
 
 		HealthCheckGracePeriod: 300
 		HealthCheckType: 'EC2'
@@ -130,6 +134,7 @@ launchConfiguration = ({profile, securityGroups, cluster}) ->
 		IamInstanceProfile: {Ref: profile}
 		InstanceMonitoring: true
 		SecurityGroups: ({Ref: sg} for sg in securityGroups)
+		AssociatePublicIpAddress: true
 
 		UserData:
 			'Fn::Base64':
@@ -154,7 +159,7 @@ elb = ({subnets, securityGroups}) ->
 			]
 			InstancePorts: [80]
 		]
-		Subnets: subnetIds #({Ref: subnet} for subnet in subnets)
+		Subnets: ({Ref: subnet} for subnet in subnets)
 		SecurityGroups: ({Ref: sg} for sg in securityGroups)
 		Listeners: [
 			InstancePort: 80
@@ -222,7 +227,7 @@ securityGroup =
 				CidrIp: '0.0.0.0/0'
 				IpProtocol: '-1'
 			]
-			VpcId: vpcId # { Ref: 'Vpc'}
+			VpcId: { Ref: 'Vpc'}
 
 
 	internal: (externalSecurityGroup, fromPort = 80, toPort = 80) ->
@@ -235,7 +240,7 @@ securityGroup =
 				FromPort: fromPort
 				ToPort: toPort
 			]
-			VpcId: vpcId # { Ref: 'Vpc'}
+			VpcId: { Ref: 'Vpc'}
 
 iam =
 	instanceRole: ->
@@ -287,12 +292,26 @@ subnet = (vpcId, availabilityZone, cidrBlock) ->
 		VpcId: { Ref: 'Vpc'}
 	DependsOn: ['Vpc', 'Igw', 'IgwAttachment']
 
+routeTableAssoc = (subnet, routeTable) ->
+	Type: 'AWS::EC2::SubnetRouteTableAssociation'
+	Properties:
+		SubnetId: {Ref: subnet}
+		RouteTableId: {Ref: routeTable}
+
+routeTableAssocs = (subnetIds) ->
+	result = {}
+	for subnetId, idx in subnetIds
+		result["RouteTableAssoc#{idx}"] = routeTableAssoc(subnetId, 'RouteTable')
+	return result
+
 subnets = ->
 	subnets = {}
 	for availabilityZone, idx in AVAILABILITY_ZONES
 		cidrBlock = "10.0.#{idx*16}.0/20"
-		subnets["Subnet#{availabilityZone.split('-').pop()}"] = subnet('Vpc', availabilityZone, cidrBlock)
+		subnetId = "Subnet#{availabilityZone.split('-').pop()}"
+		subnets[subnetId] = subnet('Vpc', availabilityZone, cidrBlock)
 	return subnets
+
 
 internetGateway = ->
 	Type: 'AWS::EC2::InternetGateway'
@@ -300,12 +319,34 @@ internetGateway = ->
 vpc = ->
 	Igw:
 		Type: 'AWS::EC2::InternetGateway'
-		Properties: {}
+
 	IgwAttachment:
 		Type: 'AWS::EC2::VPCGatewayAttachment'
 		Properties:
 			InternetGatewayId: {Ref: 'Igw'}
 			VpcId: {Ref: 'Vpc'}
+
+	Route:
+		Type: 'AWS::EC2::Route'
+		DependsOn: 'IgwAttachment'
+		Properties:
+			RouteTableId: {Ref: 'RouteTable'}
+			DestinationCidrBlock: '0.0.0.0/0'
+			GatewayId: {Ref: 'Igw'}
+
+	RouteTable:
+		Type: 'AWS::EC2::RouteTable'
+		Properties:
+			VpcId: {Ref: 'Vpc'}
+
+	# NetworkAcl:
+	# 	Type: 'AWS::EC2::NetworkAcl'
+	# 	VpcId: {Ref: 'Vpc'}
+
+  # OutBoundHTTPNetworkAclEntry:
+  #   Type: 'AWS::EC2::NetworkAclEntry'
+
+
 	Vpc:
 		Type: 'AWS::EC2::VPC'
 		Properties:
@@ -313,5 +354,29 @@ vpc = ->
 			InstanceTenancy: 'default'
 			EnableDnsSupport: 'true'
 			EnableDnsHostnames: 'true'
+			# Tags: [
+			# 	Key: 'Application'
+			# 	Value: 'AWS:StackId'
+			# ]
 
 run()
+
+# Outputs: {
+# URL: {
+# Value: {
+# Fn::Join: [
+# "",
+# [
+# "http://",
+# {
+# Fn::GetAtt: [
+# "WebServerInstance",
+# "PublicIp"
+# ]
+# }
+# ]
+# ]
+# },
+# Description: "Newly created application URL"
+# }
+# }
