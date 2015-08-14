@@ -1,0 +1,377 @@
+{
+  "Resources": {
+    "Igw": {
+      "Type": "AWS::EC2::InternetGateway"
+    },
+    "IgwAttachment": {
+      "Type": "AWS::EC2::VPCGatewayAttachment",
+      "Properties": {
+        "InternetGatewayId": {
+          "Ref": "Igw"
+        },
+        "VpcId": {
+          "Ref": "Vpc"
+        }
+      }
+    },
+    "Route": {
+      "Type": "AWS::EC2::Route",
+      "DependsOn": "IgwAttachment",
+      "Properties": {
+        "RouteTableId": {
+          "Ref": "RouteTable"
+        },
+        "DestinationCidrBlock": "0.0.0.0/0",
+        "GatewayId": {
+          "Ref": "Igw"
+        }
+      }
+    },
+    "RouteTable": {
+      "Type": "AWS::EC2::RouteTable",
+      "Properties": {
+        "VpcId": {
+          "Ref": "Vpc"
+        }
+      }
+    },
+    "Vpc": {
+      "Type": "AWS::EC2::VPC",
+      "Properties": {
+        "CidrBlock": "10.0.0.0/16",
+        "InstanceTenancy": "default",
+        "EnableDnsSupport": "true",
+        "EnableDnsHostnames": "true"
+      }
+    },
+    "Subnet1a": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "CidrBlock": "10.0.0.0/20",
+        "AvailabilityZone": "eu-west-1a",
+        "VpcId": {
+          "Ref": "Vpc"
+        }
+      },
+      "DependsOn": [
+        "Vpc",
+        "Igw",
+        "IgwAttachment"
+      ]
+    },
+    "Subnet1b": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "CidrBlock": "10.0.16.0/20",
+        "AvailabilityZone": "eu-west-1b",
+        "VpcId": {
+          "Ref": "Vpc"
+        }
+      },
+      "DependsOn": [
+        "Vpc",
+        "Igw",
+        "IgwAttachment"
+      ]
+    },
+    "Subnet1c": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "CidrBlock": "10.0.32.0/20",
+        "AvailabilityZone": "eu-west-1c",
+        "VpcId": {
+          "Ref": "Vpc"
+        }
+      },
+      "DependsOn": [
+        "Vpc",
+        "Igw",
+        "IgwAttachment"
+      ]
+    },
+    "RouteTableAssoc0": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "SubnetId": {
+          "Ref": "Subnet1a"
+        },
+        "RouteTableId": {
+          "Ref": "RouteTable"
+        }
+      }
+    },
+    "RouteTableAssoc1": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "SubnetId": {
+          "Ref": "Subnet1b"
+        },
+        "RouteTableId": {
+          "Ref": "RouteTable"
+        }
+      }
+    },
+    "RouteTableAssoc2": {
+      "Type": "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties": {
+        "SubnetId": {
+          "Ref": "Subnet1c"
+        },
+        "RouteTableId": {
+          "Ref": "RouteTable"
+        }
+      }
+    },
+    "ExternalSecurityGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupDescription": "External Security Group",
+        "SecurityGroupIngress": [
+          {
+            "CidrIp": "0.0.0.0/0",
+            "IpProtocol": "-1"
+          }
+        ],
+        "VpcId": {
+          "Ref": "Vpc"
+        }
+      }
+    },
+    "InternalSecurityGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupDescription": "Internal Security Group",
+        "SecurityGroupIngress": [
+          {
+            "SourceSecurityGroupId": {
+              "Ref": "ExternalSecurityGroup"
+            },
+            "IpProtocol": "tcp",
+            "FromPort": 80,
+            "ToPort": 80
+          }
+        ],
+        "VpcId": {
+          "Ref": "Vpc"
+        }
+      }
+    },
+    "InstanceRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Action": [
+                "sts:AssumeRole"
+              ],
+              "Principal": {
+                "Service": [
+                  "ec2.amazonaws.com"
+                ]
+              },
+              "Effect": "Allow"
+            }
+          ]
+        },
+        "Path": "/",
+        "ManagedPolicyArns": [
+          "arn:aws:iam::aws:policy/service-role/AmazonEC2ContainerServiceforEC2Role"
+        ]
+      }
+    },
+    "InstanceProfile": {
+      "Type": "AWS::IAM::InstanceProfile",
+      "Properties": {
+        "Path": "/",
+        "Roles": [
+          {
+            "Ref": "InstanceRole"
+          }
+        ]
+      }
+    },
+    "ServiceRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Action": [
+                "sts:AssumeRole"
+              ],
+              "Principal": {
+                "Service": [
+                  "ecs.amazonaws.com"
+                ]
+              },
+              "Effect": "Allow"
+            }
+          ]
+        },
+        "Path": "/",
+        "ManagedPolicyArns": [
+          "arn:aws:iam::aws:policy/service-role/AmazonEC2ContainerServiceRole"
+        ]
+      }
+    },
+    "Elb": {
+      "Type": "AWS::ElasticLoadBalancing::LoadBalancer",
+      "Properties": {
+        "Policies": [
+          {
+            "PolicyName": "WebSocketProxyProtocolPolicy",
+            "PolicyType": "ProxyProtocolPolicyType",
+            "Attributes": [
+              {
+                "Name": "ProxyProtocol",
+                "Value": true
+              }
+            ],
+            "InstancePorts": [
+              80
+            ]
+          }
+        ],
+        "Subnets": [
+          {
+            "Ref": "Subnet1a"
+          },
+          {
+            "Ref": "Subnet1b"
+          },
+          {
+            "Ref": "Subnet1c"
+          }
+        ],
+        "SecurityGroups": [
+          {
+            "Ref": "ExternalSecurityGroup"
+          }
+        ],
+        "Listeners": [
+          {
+            "InstancePort": 80,
+            "LoadBalancerPort": 80,
+            "Protocol": "tcp",
+            "InstanceProtocol": "tcp"
+          }
+        ]
+      }
+    },
+    "EcsCluster": {
+      "Type": "AWS::ECS::Cluster"
+    },
+    "ClusterLaunchConfiguration": {
+      "Type": "AWS::AutoScaling::LaunchConfiguration",
+      "Properties": {
+        "ImageId": "ami-3db4ca4a",
+        "InstanceType": "t2.micro",
+        "IamInstanceProfile": {
+          "Ref": "InstanceProfile"
+        },
+        "InstanceMonitoring": true,
+        "SecurityGroups": [
+          {
+            "Ref": "InternalSecurityGroup"
+          }
+        ],
+        "AssociatePublicIpAddress": true,
+        "UserData": {
+          "Fn::Base64": {
+            "Fn::Join": [
+              "",
+              [
+                "#!/bin/bash\n",
+                "echo ECS_CLUSTER=",
+                {
+                  "Ref": "EcsCluster"
+                },
+                " >> /etc/ecs/ecs.config"
+              ]
+            ]
+          }
+        }
+      }
+    },
+    "ClusterAutoScalingGroup": {
+      "Type": "AWS::AutoScaling::AutoScalingGroup",
+      "Properties": {
+        "MaxSize": 1,
+        "MinSize": 1,
+        "DesiredCapacity": 1,
+        "LaunchConfigurationName": {
+          "Ref": "ClusterLaunchConfiguration"
+        },
+        "LoadBalancerNames": [
+          {
+            "Ref": "Elb"
+          }
+        ],
+        "VPCZoneIdentifier": [
+          {
+            "Ref": "Subnet1a"
+          },
+          {
+            "Ref": "Subnet1b"
+          },
+          {
+            "Ref": "Subnet1c"
+          }
+        ],
+        "HealthCheckGracePeriod": 300,
+        "HealthCheckType": "EC2",
+        "Cooldown": 300
+      }
+    },
+    "MarcoPoloTask": {
+      "Type": "AWS::ECS::TaskDefinition",
+      "Properties": {
+        "ContainerDefinitions": [
+          {
+            "Name": "marco-polo",
+            "Cpu": 1024,
+            "Image": "mstrandgren/marcopolo",
+            "Memory": 512,
+            "PortMappings": [
+              {
+                "HostPort": 80,
+                "ContainerPort": 8000
+              }
+            ]
+          }
+        ],
+        "Volumes": []
+      }
+    },
+    "MarcoPoloService": {
+      "Type": "AWS::ECS::Service",
+      "DependsOn": [
+        "ClusterAutoScalingGroup"
+      ],
+      "Properties": {
+        "Cluster": {
+          "Ref": "EcsCluster"
+        },
+        "DesiredCount": 1,
+        "LoadBalancers": [
+          {
+            "ContainerName": "marco-polo",
+            "ContainerPort": 8000,
+            "LoadBalancerName": {
+              "Ref": "Elb"
+            }
+          }
+        ],
+        "Role": {
+          "Ref": "ServiceRole"
+        },
+        "TaskDefinition": {
+          "Ref": "MarcoPoloTask"
+        }
+      }
+    }
+  }
+}

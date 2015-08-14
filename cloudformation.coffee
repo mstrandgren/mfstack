@@ -2,22 +2,46 @@ _ = require('lodash')
 Promise = require('promise')
 {ec2, cf} = require('./awsUtils.coffee')
 
-
-
 AWS_UID = '066341227319'
 AVAILABILITY_ZONES = ['eu-west-1a', 'eu-west-1b', 'eu-west-1c']
 
-vpcId = 'vpc-a3a929c6'
-# subnetIds =
-# 	sub1: 'subnet-9b7bc4c2'
-# 	sub2: 'subnet-e0433e85'
-# 	sub3: 'subnet-e57b1e92'
+
+
+waitFor = (condition, interval, label) ->
+	startTime = Date.now()
+	new Promise (resolve, reject) ->
+		check = ->
+			condition()
+			.then (complete) ->
+				if complete
+					process.stdout.write('\n')
+					return resolve()
+
+				timeElapsed = (Date.now() - startTime)/1000
+				process.stdout.clearLine()
+				process.stdout.cursorTo(0)
+				process.stdout.write("#{label} #{Math.floor(timeElapsed/60)}m #{Math.round(timeElapsed)%60}s")
+				setTimeout(check, interval)
+		check()
+
+checkStackReady = (name) ->
+	->
+		cf.describeStacks(StackName: name)
+		.then (data) ->
+			status = data.Stacks[0].StackStatus
+			if /COMPLETE/.test(status) then return data.Stacks[0]
+			return false
+
+createStack = (name, template) ->
+	cf.createStack
+		Capabilities: ['CAPABILITY_IAM']
+		StackName: name
+		TemplateBody: JSON.stringify(template)
+	.then (data) ->
+		waitFor(checkStackReady(name), 10000, "Creating stack")
 
 run = ->
-	console.log 'Creating stack...'
 	template = createTemplate()
-	# console.log JSON.stringify(template, null, 2)
-	# return
 
 	stackPolicy =
 		Statement: [
@@ -26,6 +50,14 @@ run = ->
 			Principal: '*',
 			Resource : '*'
 		]
+
+	createStack('test-stack-9', template)
+	.then (result) ->
+		console.log "Created stack: \n#{JSON.stringify(result)}"
+	.then null, (e) ->
+		console.log "Something went wrong: ", e
+	return
+
 
 	cf.createStack
 		Capabilities: ['CAPABILITY_IAM']
@@ -39,13 +71,14 @@ run = ->
 			cf.describeStacks(StackName: data.StackId)
 			.then (data) ->
 				status = data.Stacks[0].StackStatus
-				if status == 'UPDATE_IN_PROGRESS'
-					console.log "Update in progress"
+				if not /COMPLETE/.test(status)
 					return new Promise (resolve, reject) ->
+						console.log 'Creating'
 						setTimeout ->
 							resolve(checkReady())
-						, 1000
+						, 15000
 
+				console.log JSON.stringify(data)
 				return data.Stacks[0]
 
 		checkReady()
@@ -105,8 +138,17 @@ createTemplate = ->
 			taskDefinition: 'MarcoPoloTask'
 
 
+	Outputs =
+		URL:
+			Value:
+				'Fn::Join': ['',[
+					'http://'
+					'Fn::GetAtt': ['Elb' ,'DNSName']
+				]]
+
 	return {
 		Resources
+		Outputs
 	}
 
 
@@ -124,7 +166,6 @@ autoScalingGroup = ({launchConfiguration, loadBalancers, subnets}) ->
 		HealthCheckGracePeriod: 300
 		HealthCheckType: 'EC2'
 		Cooldown: 300
-	# DependsOn: subnets.concat(loadBalancers).concat([launchConfiguration])
 
 launchConfiguration = ({profile, securityGroups, cluster}) ->
 	Type: 'AWS::AutoScaling::LaunchConfiguration'
@@ -144,8 +185,6 @@ launchConfiguration = ({profile, securityGroups, cluster}) ->
 					{Ref: cluster}
 					" >> /etc/ecs/ecs.config"
 				]]
-	# DependsOn: securityGroups.concat([profile]).concat([cluster])
-
 
 elb = ({subnets, securityGroups}) ->
 	Type: 'AWS::ElasticLoadBalancing::LoadBalancer'
@@ -167,21 +206,6 @@ elb = ({subnets, securityGroups}) ->
 			Protocol: 'tcp'
 			InstanceProtocol: 'tcp'
 		]
-		# ConnectionSettings:
-		# 	IdleTimeout: 3600
-		# ConnectionDrainingPolicy:
-		# 	Enabled: true
-		# 	Timeout: 300
-		# CrossZone: true
-	# DependsOn: subnets.concat(securityGroups)
-
-		# HealthCheck:
-		# 	HealthyThreshold: 10
-		# 	Interval: 30
-		# 	Target: "HTTP:80/index.html"
-		# 	Timeout: 5
-		# 	UnhealthyThreshold: 2
-
 
 
 
@@ -198,7 +222,6 @@ service = ({autoScalingGroup, cluster, count, containerName, loadBalancer, role,
 		]
 		Role: {Ref: role}
 		TaskDefinition: {Ref: taskDefinition}
-
 
 taskDefinition = (name, image) ->
 	Type: 'AWS::ECS::TaskDefinition'
@@ -279,10 +302,7 @@ iam =
 			Path: '/'
 			ManagedPolicyArns: [
 				'arn:aws:iam::aws:policy/service-role/AmazonEC2ContainerServiceRole'
-				# 'arn:aws:iam::aws:policy/AmazonEC2ContainerServiceFullAccess'
 			]
-
-
 
 subnet = (vpcId, availabilityZone, cidrBlock) ->
 	Type: 'AWS::EC2::Subnet'
@@ -339,14 +359,6 @@ vpc = ->
 		Properties:
 			VpcId: {Ref: 'Vpc'}
 
-	# NetworkAcl:
-	# 	Type: 'AWS::EC2::NetworkAcl'
-	# 	VpcId: {Ref: 'Vpc'}
-
-  # OutBoundHTTPNetworkAclEntry:
-  #   Type: 'AWS::EC2::NetworkAclEntry'
-
-
 	Vpc:
 		Type: 'AWS::EC2::VPC'
 		Properties:
@@ -354,29 +366,7 @@ vpc = ->
 			InstanceTenancy: 'default'
 			EnableDnsSupport: 'true'
 			EnableDnsHostnames: 'true'
-			# Tags: [
-			# 	Key: 'Application'
-			# 	Value: 'AWS:StackId'
-			# ]
+
 
 run()
 
-# Outputs: {
-# URL: {
-# Value: {
-# Fn::Join: [
-# "",
-# [
-# "http://",
-# {
-# Fn::GetAtt: [
-# "WebServerInstance",
-# "PublicIp"
-# ]
-# }
-# ]
-# ]
-# },
-# Description: "Newly created application URL"
-# }
-# }
