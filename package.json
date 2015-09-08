@@ -4,8 +4,9 @@
   "private": true,
   "dependencies": {
     "coffee-script": "^1.9.x",
-    "promise": "~7.0.3",
-    "lodash": "~3.10.0"
+    "columnify": "^1.5.2",
+    "lodash": "~3.10.0",
+    "promise": "~7.0.3"
   },
   "devDependencies": {
     "aws-sdk": "*",
