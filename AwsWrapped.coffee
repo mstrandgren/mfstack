@@ -27,4 +27,4 @@ module.exports =
 	s3: wrapAPI(new AWS.S3())
 	cf: wrapAPI(new AWS.CloudFormation())
 	ecs: wrapAPI(new AWS.ECS())
-
+	as: wrapAPI(new AWS.AutoScaling())

@@ -43,7 +43,7 @@ exports.createTemplate = ->
 		Service: service
 			autoScalingGroup: 'ClusterAutoScalingGroup'
 			cluster: 'Cluster'
-			count: 1
+			count: 2
 			loadBalancer: 'Elb'
 			containerName: 'marcopolo'
 			role: 'ServiceRole'
@@ -66,9 +66,9 @@ exports.createTemplate = ->
 autoScalingGroup = ({launchConfiguration, loadBalancers, subnets}) ->
 	Type: 'AWS::AutoScaling::AutoScalingGroup'
 	Properties:
-		MaxSize: 1
-		MinSize: 1
-		DesiredCapacity: 1
+		MaxSize: 2
+		MinSize: 2
+		DesiredCapacity: 2
 
 		LaunchConfigurationName: {Ref: launchConfiguration}
 		LoadBalancerNames: ({Ref: lb} for lb in loadBalancers)
