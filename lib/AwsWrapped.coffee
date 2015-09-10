@@ -1,13 +1,7 @@
 _ = require('lodash')
 Promise = require('promise')
 AWS = require('aws-sdk')
-awsConfig = require("#{process.cwd()}/aws.json")
 
-AWS.config =
-	accessKeyId: awsConfig.key
-	secretAccessKey: awsConfig.secret
-	region: awsConfig.region
-	sslEnabled: true
 
 wrapPromise = (cb) ->
 	(params) ->
@@ -22,7 +16,8 @@ wrapAPI = (original) ->
 		wrapped[key] = wrapPromise(fn.bind(original))
 	return wrapped
 
-module.exports =
+module.exports = (awsConfig) ->
+	AWS.config = awsConfig
 	ec2: wrapAPI(new AWS.EC2())
 	s3: wrapAPI(new AWS.S3())
 	cf: wrapAPI(new AWS.CloudFormation())

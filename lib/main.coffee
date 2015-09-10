@@ -7,6 +7,7 @@ scriptName = path.basename(process.argv[1])
 stack = require('./Stack.coffee')
 settings = require('./Settings.coffee')
 
+
 run = ->
 	[command, args...] = argv._
 
@@ -20,6 +21,12 @@ run = ->
 	.then (opts) ->
 		if not opts.image or not opts.stackName
 			throw new Error("No stack found, run  \n\n#{colors.cyan("$ #{scriptName} init")}\n\nto initialize it.")
+
+		try
+			awsConfig = loadAwsConfig(argv['aws-config'])
+			require('./AwsOperations.coffee').initAws(awsConfig)
+		catch e
+			throw new Error("Could not load aws config from #{argv['aws-config'] ? 'aws.json'}")
 
 		if command == 'create' then return stack.create(opts.stackName, opts.image)
 		if command == 'destroy' then return stack.destroy(opts.stackName)
@@ -36,22 +43,38 @@ run = ->
 
 printHelp = ->
 	console.log """
-Usage: mfstack <command> <stackname> [size] [options]
+		Usage: mfstack <command> <stackname> [size] [options]
 
-Available commands:
-	init		Initialize a new stack in this directory (local only)
-	delete		Delete the stack config from this directory (local only)
-	create		Create the stack in AWS
-	destroy		Delete the stack from AWS (WARNING: very destructive, nothing remains)
-	scale		Set the number of containers/instances the stack should have
-	deploy		Redeploy the latest version of the image on the stack
+		Available commands:
+			init		Initialize a new stack in this directory (local only)
+			delete		Delete the stack config from this directory (local only)
+			create		Create the stack in AWS
+			destroy		Delete the stack from AWS (WARNING: very destructive, nothing remains)
+			scale		Set the number of containers/instances the stack should have
+			deploy		Redeploy the latest version of the image on the stack
 
+			options:
+			--aws-config <file>	Load AWS credentials from this file (defaults to aws.json)
+			--debug			More verbose error messages
 	"""
+
+loadAwsConfig = (fileName = 'aws.json') ->
+	console.log "Loading aws settings from #{fileName}"
+	configPath = path.resolve(process.cwd(), fileName)
+	awsConfig = require(configPath)
+
+	return {
+		accessKeyId: awsConfig.key
+		secretAccessKey: awsConfig.secret
+		region: awsConfig.region
+		sslEnabled: true
+	}
 
 module.exports = ->
 	run()
 	.then null, (e) ->
 		console.log e.message
-		console.log e.stack
+		if argv.debug
+			console.log e.stack
 
 

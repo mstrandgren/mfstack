@@ -2,11 +2,11 @@ _ = require('lodash')
 Promise = require('promise')
 colors = require('colors/safe')
 
-{cf, ec2, ecs, as} = require('./AwsWrapped.coffee')
+{cf, ec2, ecs, as} = {}
 
 
-
-
+initAws = (settings) ->
+	{cf, ec2, ecs, as} = require('./AwsWrapped.coffee')(settings)
 
 createStack = (name, template) ->
 	cf.createStack
@@ -109,6 +109,8 @@ restartTask = (stackName, taskId, desiredCapacity) ->
 		waitForTasks(stackName, desiredCapacity)
 
 module.exports = {
+	initAws
+
 	createStack
 	updateStack
 	deleteStack
