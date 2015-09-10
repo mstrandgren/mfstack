@@ -1,7 +1,7 @@
 _ = require('lodash')
 Promise = require('promise')
 AWS = require('aws-sdk')
-awsConfig = require('./aws.json')
+awsConfig = require("#{process.cwd()}/aws.json")
 
 AWS.config =
 	accessKeyId: awsConfig.key

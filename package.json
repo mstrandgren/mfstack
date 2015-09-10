@@ -1,7 +1,10 @@
 {
-  "name": "marcopolo",
+  "name": "mfstack",
   "version": "0.0.1",
-  "private": true,
+  "main": "./lib/main.coffee",
+  "bin": {
+    "mfstack": "./bin/mfstack"
+  },
   "dependencies": {
     "coffee-script": "^1.9.x",
     "colors": "^1.1.2",
@@ -9,11 +12,8 @@
     "lodash": "~3.10.0",
     "minimist": "^1.2.0",
     "promise": "~7.0.3",
-    "prompt": "^0.2.14"
-  },
-  "devDependencies": {
-    "aws-sdk": "*",
-    "npm": "~2.8.4"
+    "prompt": "^0.2.14",
+    "aws-sdk": "*"
   },
   "engines": {
     "node": ">=0.10.0"

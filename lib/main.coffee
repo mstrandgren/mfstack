@@ -48,9 +48,10 @@ Available commands:
 
 	"""
 
-run()
-.then null, (e) ->
-	console.log e.message
-	console.log e.stack
+module.exports = ->
+	run()
+	.then null, (e) ->
+		console.log e.message
+		console.log e.stack
 
 
