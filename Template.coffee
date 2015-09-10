@@ -3,7 +3,9 @@ _ = require('lodash')
 AVAILABILITY_ZONES = ['eu-west-1a', 'eu-west-1b', 'eu-west-1c']
 
 
-exports.createTemplate = ->
+exports.createTemplate = ({image}) ->
+
+	taskName = image.split('/').pop()
 
 	_subnets = subnets()
 	subnetIds = _.keys(_subnets)
@@ -39,13 +41,13 @@ exports.createTemplate = ->
 			subnets: subnetIds
 
 
-		Task: taskDefinition('marcopolo', 'mstrandgren/marcopolo')
+		Task: taskDefinition(taskName, image)
 		Service: service
 			autoScalingGroup: 'ClusterAutoScalingGroup'
 			cluster: 'Cluster'
-			count: 2
+			count: 1
 			loadBalancer: 'Elb'
-			containerName: 'marcopolo'
+			containerName: taskName
 			role: 'ServiceRole'
 			taskDefinition: 'Task'
 
@@ -66,9 +68,9 @@ exports.createTemplate = ->
 autoScalingGroup = ({launchConfiguration, loadBalancers, subnets}) ->
 	Type: 'AWS::AutoScaling::AutoScalingGroup'
 	Properties:
-		MaxSize: 2
-		MinSize: 2
-		DesiredCapacity: 2
+		MaxSize: 1
+		MinSize: 1
+		DesiredCapacity: 1
 
 		LaunchConfigurationName: {Ref: launchConfiguration}
 		LoadBalancerNames: ({Ref: lb} for lb in loadBalancers)
@@ -192,6 +194,18 @@ iam =
 					Effect: 'Allow'
 				]
 			Path: '/'
+			Policies: [
+				PolicyName: 's3AccessPolicy'
+				PolicyDocument:
+					Version: '2012-10-17'
+					Statement: [
+						Action: ['s3:GetObject']
+						Resource: [
+							'arn:aws:s3:::mf-stack/environment.json'
+						]
+						Effect: 'Allow'
+					]
+			]
 			ManagedPolicyArns: [
 				'arn:aws:iam::aws:policy/service-role/AmazonEC2ContainerServiceforEC2Role'
 			]

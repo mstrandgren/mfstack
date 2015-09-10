@@ -48,13 +48,24 @@ deleteStack = (name) ->
 
 scaleTo = (stackName, size) ->
 	console.log "Scaling '#{stackName}' to #{size}"
-	getPhysicalId(stackName, 'ClusterAutoScalingGroup')
-	.then (asgName) ->
-		as.updateAutoScalingGroup
-			AutoScalingGroupName: asgName
-			DesiredCapacity: size
-			MaxSize: size
-			MinSize: size
+	Promise.all [
+		getPhysicalId(stackName, 'ClusterAutoScalingGroup')
+		getPhysicalId(stackName, 'Cluster')
+		getPhysicalId(stackName, 'Service')
+	]
+	.then ([asgName, clusterName, serviceName]) ->
+		Promise.all [
+			as.updateAutoScalingGroup
+				AutoScalingGroupName: asgName
+				DesiredCapacity: size
+				MaxSize: size
+				MinSize: size
+		,
+			ecs.updateService
+				cluster: clusterName,
+				service: serviceName,
+				desiredCount: size
+		]
 	.then (result) ->
 		waitForInstances(stackName, size)
 	.then ->
@@ -86,8 +97,6 @@ redeploy = (stackName) ->
 			scaleTo(stackName, originalSize)
 	.then ->
 		console.log "All done"
-
-
 
 restartTask = (stackName, taskId, desiredCapacity) ->
 	console.log "Restarting task #{taskId}"

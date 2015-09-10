@@ -8,7 +8,8 @@
     "columnify": "^1.5.2",
     "lodash": "~3.10.0",
     "minimist": "^1.2.0",
-    "promise": "~7.0.3"
+    "promise": "~7.0.3",
+    "prompt": "^0.2.14"
   },
   "devDependencies": {
     "aws-sdk": "*",
