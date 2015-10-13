@@ -7,13 +7,14 @@ scriptName = path.basename(process.argv[1])
 stack = require('./Stack.coffee')
 settings = require('./Settings.coffee')
 
+AWS_CONFIG_FILE = 'mfstack.aws.json'
 
 run = ->
 	[command, args...] = argv._
 
 	if command == 'init'
 		[stackName, image] = args
-		return stack.init(stackName, image)
+		return stack.init(stackName, {image})
 	if command == 'delete'
 		return stack.remove()
 
@@ -26,9 +27,11 @@ run = ->
 			awsConfig = loadAwsConfig(argv['aws-config'])
 			require('./AwsOperations.coffee').initAws(awsConfig)
 		catch e
-			throw new Error("Could not load aws config from #{argv['aws-config'] ? 'aws.json'}")
+			throw new Error("Could not load aws config from #{argv['aws-config'] ? AWS_CONFIG_FILE}")
 
-		if command == 'create' then return stack.create(opts.stackName, opts.image)
+		environment = loadEnvironment(argv['environment'])
+
+		if command == 'create' then return stack.create(opts.stackName, opts)
 		if command == 'destroy' then return stack.destroy(opts.stackName)
 		if command == 'deploy' then return stack.redeploy(opts.stackName)
 
@@ -55,10 +58,16 @@ printHelp = ->
 
 			options:
 			--aws-config <file>	Load AWS credentials from this file (defaults to aws.json)
+			--environment <file> Load environment from this file
 			--debug			More verbose error messages
 	"""
 
-loadAwsConfig = (fileName = 'aws.json') ->
+loadEnvironment = (fileName) ->
+	return unless fileName?
+	require(path.resolve(process.cwd(), fileName))
+
+loadAwsConfig = (fileName) ->
+	fileName ?= AWS_CONFIG_FILE
 	console.log "Loading aws settings from #{fileName}"
 	configPath = path.resolve(process.cwd(), fileName)
 	awsConfig = require(configPath)

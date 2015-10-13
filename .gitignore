@@ -1,4 +1,5 @@
-aws-goo.json
-aws.json
+*aws.json
 node_modules
 .mfstack
+test
+*.sublime-*

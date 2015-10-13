@@ -8,7 +8,7 @@ path = require('path')
 scriptName = path.basename(process.argv[1])
 settings = require('./Settings.coffee')
 
-init = (stackName, image) ->
+init = (stackName, {image, environment, keyName}) ->
 	settings.load()
 	.then (data) ->
 		if _.keys(data).length
@@ -25,6 +25,9 @@ init = (stackName, image) ->
 				pattern: /^[A-Za-z\-\/]+$/
 				required: true
 				message: 'Illegal image name'
+		if not keyName?
+			promptProps.keyName =
+				description: "SSH key name (optional): "
 
 		prompt.message = ""
 		prompt.delimiter = ""
@@ -36,11 +39,12 @@ init = (stackName, image) ->
 			, (err, data) ->
 				stackName or= data.stackName or defaultName
 				image or= data.image
-				data = {stackName, image}
+				keyName or= data.keyName or undefined
+				data = {stackName, image, keyName}
 				resolve(settings.save(data))
 
-create = (stackName, image) ->
-	template = createTemplate({image})
+create = (stackName, {image, environment, keyName}) ->
+	template = createTemplate(stackName, {image, environment, keyName})
 	aws.createStack(stackName, template)
 	.then (result) ->
 		if not result.Outputs.length

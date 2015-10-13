@@ -3,11 +3,12 @@ _ = require('lodash')
 AVAILABILITY_ZONES = ['eu-west-1a', 'eu-west-1b', 'eu-west-1c']
 
 
-exports.createTemplate = ({image}) ->
+exports.createTemplate = (stackName, {image, environment, keyName}) ->
 
 	taskName = image.split('/').pop()
 
 	_subnets = subnets()
+	bucketName = "#{stackName}-config"
 	subnetIds = _.keys(_subnets)
 
 	Resources = _.extend {},
@@ -20,9 +21,12 @@ exports.createTemplate = ({image}) ->
 		ExternalSecurityGroup: securityGroup.external()
 		InternalSecurityGroup: securityGroup.internal('ExternalSecurityGroup')
 
-		InstanceRole: iam.instanceRole()
+		InstanceRole: iam.instanceRole(bucketName)
 		InstanceProfile: iam.profile('InstanceRole')
 		ServiceRole: iam.serviceRole()
+
+		Bucket: bucket
+			name: bucketName
 
 		Elb: elb
 			subnets: subnetIds
@@ -34,14 +38,14 @@ exports.createTemplate = ({image}) ->
 			profile: 'InstanceProfile'
 			securityGroups: ['InternalSecurityGroup']
 			cluster: 'Cluster'
+			keyName: keyName
 
 		ClusterAutoScalingGroup: autoScalingGroup
 			launchConfiguration: 'ClusterLaunchConfiguration'
 			loadBalancers: ['Elb']
 			subnets: subnetIds
 
-
-		Task: taskDefinition(taskName, image)
+		Task: taskDefinition(taskName, image, environment)
 		Service: service
 			autoScalingGroup: 'ClusterAutoScalingGroup'
 			cluster: 'Cluster'
@@ -80,7 +84,7 @@ autoScalingGroup = ({launchConfiguration, loadBalancers, subnets}) ->
 		HealthCheckType: 'EC2'
 		Cooldown: 300
 
-launchConfiguration = ({profile, securityGroups, cluster}) ->
+launchConfiguration = ({profile, securityGroups, cluster, keyName}) ->
 	Type: 'AWS::AutoScaling::LaunchConfiguration'
 	Properties:
 		ImageId: 'ami-3db4ca4a'
@@ -89,6 +93,7 @@ launchConfiguration = ({profile, securityGroups, cluster}) ->
 		InstanceMonitoring: true
 		SecurityGroups: ({Ref: sg} for sg in securityGroups)
 		AssociatePublicIpAddress: true
+		KeyName: keyName
 
 		UserData:
 			'Fn::Base64':
@@ -115,9 +120,11 @@ elb = ({subnets, securityGroups}) ->
 		SecurityGroups: ({Ref: sg} for sg in securityGroups)
 		Listeners: [
 			InstancePort: 80
-			InstanceProtocol: 'tcp'
+			# InstanceProtocol: 'tcp' Need to fix proxywrapper first
+			InstanceProtocol: 'http'
 			LoadBalancerPort: 80
-			Protocol: 'tcp'
+			# Protocol: 'tcp'
+			Protocol: 'http'
 		# ,
 		# 	InstancePort: 80
 		# 	InstanceProtocol: 'tcp'
@@ -140,7 +147,7 @@ service = ({autoScalingGroup, cluster, count, containerName, loadBalancer, role,
 		Role: {Ref: role}
 		TaskDefinition: {Ref: taskDefinition}
 
-taskDefinition = (name, image) ->
+taskDefinition = (name, image, environment = {}) ->
 	Type: 'AWS::ECS::TaskDefinition'
 	Properties:
 		ContainerDefinitions: [
@@ -152,6 +159,7 @@ taskDefinition = (name, image) ->
 				HostPort: 80
 				ContainerPort: 8000
 			]
+			Environment: (Name: k, Value: v for k, v of environment)
 		]
 		Volumes: []
 
@@ -178,11 +186,21 @@ securityGroup =
 				IpProtocol: 'tcp'
 				FromPort: fromPort
 				ToPort: toPort
+			,
+				CidrIp: '0.0.0.0/0'
+				IpProtocol: 'tcp'
+				FromPort: 22
+				ToPort: 22
 			]
 			VpcId: { Ref: 'Vpc'}
 
+bucket = ({name}) ->
+	Type: 'AWS::S3::Bucket'
+	Properties:
+		BucketName: name
+
 iam =
-	instanceRole: ->
+	instanceRole: (bucketName) ->
 		Type: 'AWS::IAM::Role',
 		Properties:
 			AssumeRolePolicyDocument:
@@ -201,7 +219,7 @@ iam =
 					Statement: [
 						Action: ['s3:GetObject']
 						Resource: [
-							'arn:aws:s3:::mf-stack/environment.json'
+							"arn:aws:s3:::#{bucketName}/*"
 						]
 						Effect: 'Allow'
 					]
