@@ -7,6 +7,8 @@ prompt = require('prompt')
 path = require('path')
 scriptName = path.basename(process.argv[1])
 settings = require('./Settings.coffee')
+colors = require('colors/safe')
+
 
 init = (stackName, {image, environment, keyName}) ->
 	settings.load()
@@ -49,8 +51,7 @@ create = (stackName, {image, environment, keyName}) ->
 	.then (result) ->
 		if not result.Outputs.length
 			throw new Error "Stack creation failed, check the console for details"
-
-		console.log "Stack '#{stackName}' is up and running"
+		console.log "#{colors.green("Stack '#{stackName}' is up and running")}"
 		console.log "Visit #{result.Outputs[0].OutputValue}"
 
 remove = ->
@@ -70,9 +71,15 @@ redeploy = (stackName) ->
 	aws.redeploy(stackName)
 	.then (result) ->
 		console.log "Stack '#{stackName}' updated"
-	.then null, (e) ->
-		console.error e
-		console.error e.stack
+
+{exec} = require('child_process')
+
+sshCommand = (stackName, keyName) ->
+	aws.getIpForInstances(stackName)
+	.then (ips) ->
+		cmdline = "ssh -i \"#{keyName}.pem\" ec2-user@#{ips[0]}"
+		console.log "Run $ #{colors.cyan(cmdline)}"
+
 
 module.exports = {
 	init
@@ -81,4 +88,5 @@ module.exports = {
 	destroy
 	scale
 	redeploy
+	sshCommand
 }

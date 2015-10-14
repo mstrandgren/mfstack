@@ -1,5 +1,5 @@
 *aws.json
 node_modules
 .mfstack
-test
+*.pem
 *.sublime-*

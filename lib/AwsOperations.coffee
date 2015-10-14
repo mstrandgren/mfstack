@@ -73,7 +73,6 @@ scaleTo = (stackName, size) ->
 	.then ->
 		console.log("'#{stackName}' is now at #{size}")
 
-
 redeploy = (stackName) ->
 	console.log "Redeploying '#{stackName}'"
 	originalSize = undefined
@@ -108,6 +107,19 @@ restartTask = (stackName, taskId, desiredCapacity) ->
 	.then ->
 		waitForTasks(stackName, desiredCapacity)
 
+getIpForInstances = (stackName) ->
+	getPhysicalId(stackName, 'Vpc')
+	.then (vpcName) ->
+		ec2.describeInstances
+			Filters: [
+				Name: 'vpc-id'
+				Values: [vpcName]
+			]
+	.then (result) ->
+		for res in result.Reservations
+			for ins in res.Instances
+				ins.PublicIpAddress
+
 module.exports = {
 	initAws
 
@@ -116,6 +128,7 @@ module.exports = {
 	deleteStack
 	scaleTo
 	redeploy
+	getIpForInstances
 }
 
 # --------------------------------------------------------

@@ -34,12 +34,17 @@ run = ->
 		if command == 'create' then return stack.create(opts.stackName, opts)
 		if command == 'destroy' then return stack.destroy(opts.stackName)
 		if command == 'deploy' then return stack.redeploy(opts.stackName)
+		if command == 'ssh'
+			if not opts.keyName
+				throw new Error("No keyname associated with this stack. You might need to reinitialize.")
+			return stack.sshCommand(opts.stackName, opts.keyName)
 
 		if command == 'scale'
 			size = args[0]
 			if not size? or size < 1 or size > 20
 				throw new Error("A size between 1 and 20 is required")
 			return stack.scale(opts.stackName, size)
+
 
 		console.log "Unrecognized command #{command}"
 		printHelp()
@@ -55,6 +60,7 @@ printHelp = ->
 			destroy		Delete the stack from AWS (WARNING: very destructive, nothing remains)
 			scale		Set the number of containers/instances the stack should have
 			deploy		Redeploy the latest version of the image on the stack
+			ssh			Get a command line to ssh into an instance
 
 			options:
 			--aws-config <file>	Load AWS credentials from this file (defaults to aws.json)
