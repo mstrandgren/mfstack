@@ -2,7 +2,6 @@ _ = require('lodash')
 
 AVAILABILITY_ZONES = ['eu-west-1a', 'eu-west-1b', 'eu-west-1c']
 
-
 exports.createTemplate = (stackName, {image, environment, keyName}) ->
 
 	taskName = image.split('/').pop()
@@ -39,6 +38,7 @@ exports.createTemplate = (stackName, {image, environment, keyName}) ->
 			securityGroups: ['InternalSecurityGroup']
 			cluster: 'Cluster'
 			keyName: keyName
+			bucketName: bucketName
 
 		ClusterAutoScalingGroup: autoScalingGroup
 			launchConfiguration: 'ClusterLaunchConfiguration'
@@ -84,7 +84,7 @@ autoScalingGroup = ({launchConfiguration, loadBalancers, subnets}) ->
 		HealthCheckType: 'EC2'
 		Cooldown: 300
 
-launchConfiguration = ({profile, securityGroups, cluster, keyName}) ->
+launchConfiguration = ({stackName, profile, securityGroups, cluster, keyName, bucketName}) ->
 	Type: 'AWS::AutoScaling::LaunchConfiguration'
 	Properties:
 		ImageId: 'ami-3db4ca4a'
@@ -101,7 +101,11 @@ launchConfiguration = ({profile, securityGroups, cluster, keyName}) ->
 					"#!/bin/bash\n"
 					"echo ECS_CLUSTER="
 					{Ref: cluster}
-					" >> /etc/ecs/ecs.config"
+					" >> /etc/ecs/ecs.config\n"
+					"yum install -y aws-cli\n"
+					"aws s3 cp s3://#{bucketName}/ecs.config /etc/ecs/ecs.credentials\n"
+					"cat /etc/ecs/ecs.credentials >> /etc/ecs/ecs.config"
+					""
 				]]
 
 elb = ({subnets, securityGroups}) ->

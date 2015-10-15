@@ -1,11 +1,12 @@
+require('es6-shim')
 _ = require('lodash')
-Promise = require('promise')
 colors = require('colors/safe')
-argv = require('minimist')(process.argv[2..])
 path = require('path')
-scriptName = path.basename(process.argv[1])
 stack = require('./Stack.coffee')
 settings = require('./Settings.coffee')
+
+argv = require('minimist')(process.argv[2..])
+scriptName = path.basename(process.argv[1])
 
 AWS_CONFIG_FILE = 'mfstack.aws.json'
 
@@ -27,6 +28,9 @@ run = ->
 			awsConfig = loadAwsConfig(argv['aws-config'])
 			require('./AwsOperations.coffee').initAws(awsConfig)
 		catch e
+			if argv.debug
+				console.error e
+
 			throw new Error("Could not load aws config from #{argv['aws-config'] ? AWS_CONFIG_FILE}")
 
 		environment = loadEnvironment(argv['environment'])
@@ -34,6 +38,15 @@ run = ->
 		if command == 'create' then return stack.create(opts.stackName, opts)
 		if command == 'destroy' then return stack.destroy(opts.stackName)
 		if command == 'deploy' then return stack.redeploy(opts.stackName)
+		if command == 'open' then return stack.open(opts.stackName)
+		if command == 'settings' then return console.log colors.cyan(JSON.stringify(opts, null, 2))
+
+		if command == 'push'
+			files = args[..]
+			if files.length == 0
+				throw new Error("You need to supply config files")
+			return stack.push(opts.stackName, files)
+
 		if command == 'ssh'
 			if not opts.keyName
 				throw new Error("No keyname associated with this stack. You might need to reinitialize.")
@@ -61,9 +74,11 @@ printHelp = ->
 			scale		Set the number of containers/instances the stack should have
 			deploy		Redeploy the latest version of the image on the stack
 			ssh			Get a command line to ssh into an instance
+			push		Upload config files to the associated config bucket
+			open		Open the stack url in a web browser
 
 			options:
-			--aws-config <file>	Load AWS credentials from this file (defaults to aws.json)
+			--aws-config <file>	Load AWS credentials from this file (defaults to mfstack.aws.json)
 			--environment <file> Load environment from this file
 			--debug			More verbose error messages
 	"""
@@ -74,7 +89,7 @@ loadEnvironment = (fileName) ->
 
 loadAwsConfig = (fileName) ->
 	fileName ?= AWS_CONFIG_FILE
-	console.log "Loading aws settings from #{fileName}"
+	# console.log "Loading aws settings from #{fileName}"
 	configPath = path.resolve(process.cwd(), fileName)
 	awsConfig = require(configPath)
 
@@ -88,7 +103,7 @@ loadAwsConfig = (fileName) ->
 module.exports = ->
 	run()
 	.then null, (e) ->
-		console.log e.message
+		console.log "#{colors.red("Error: #{e.message}")}"
 		if argv.debug
 			console.log e.stack
 

@@ -1,14 +1,16 @@
+require('es6-shim')
 _ = require('lodash')
-Promise = require('promise')
-aws = require('./AwsOperations.coffee')
-{createTemplate} = require('./Template.coffee')
 colors = require('colors/safe')
 prompt = require('prompt')
 path = require('path')
-scriptName = path.basename(process.argv[1])
+{wrapApi} = require('./Util.coffee')
+fs = wrapApi(require('fs'))
 settings = require('./Settings.coffee')
+aws = require('./AwsOperations.coffee')
+{createTemplate} = require('./Template.coffee')
 colors = require('colors/safe')
 
+scriptName = path.basename(process.argv[1])
 
 init = (stackName, {image, environment, keyName}) ->
 	settings.load()
@@ -45,14 +47,22 @@ init = (stackName, {image, environment, keyName}) ->
 				data = {stackName, image, keyName}
 				resolve(settings.save(data))
 
-create = (stackName, {image, environment, keyName}) ->
+
+create = (stackName, {image, environment, keyName, dockerAuth}) ->
 	template = createTemplate(stackName, {image, environment, keyName})
+
+	if dockerAuth
+		aws.addEventListener 'stackchanged', ({resource, status}) ->
+			if resource == 'Bucket' and status == 'CREATE_COMPLETE'
+				putEcsConfig(stackName, dockerAuth)
+
 	aws.createStack(stackName, template)
 	.then (result) ->
 		if not result.Outputs.length
 			throw new Error "Stack creation failed, check the console for details"
 		console.log "#{colors.green("Stack '#{stackName}' is up and running")}"
 		console.log "Visit #{result.Outputs[0].OutputValue}"
+
 
 remove = ->
 	settings.remove()
@@ -72,14 +82,25 @@ redeploy = (stackName) ->
 	.then (result) ->
 		console.log "Stack '#{stackName}' updated"
 
-{exec} = require('child_process')
-
 sshCommand = (stackName, keyName) ->
 	aws.getIpForInstances(stackName)
 	.then (ips) ->
 		cmdline = "ssh -i \"#{keyName}.pem\" ec2-user@#{ips[0]}"
 		console.log "Run $ #{colors.cyan(cmdline)}"
 
+push = (stackName, files) ->
+	aws.putConfigFiles(stackName, files, {log: true})
+
+{exec} = require('child_process')
+
+open = (stackName) ->
+	aws.getElbPublicDns(stackName)
+	.then (address) ->
+		exec "open http://#{address}", (err, stdout, stderr) ->
+			if err
+				console.log err
+				console.log stderr
+				return
 
 module.exports = {
 	init
@@ -89,4 +110,18 @@ module.exports = {
 	scale
 	redeploy
 	sshCommand
+	push
+	open
 }
+
+
+putEcsConfig = (stackName, dockerAuth) ->
+	fs.writeFile 'ecs.config', """
+		ECS_ENGINE_AUTH_TYPE=dockercfg
+		ECS_ENGINE_AUTH_DATA=#{JSON.stringify(dockerAuth)}
+	"""
+	.then ->
+		aws.putConfigFiles(stackName, ['ecs.config'])
+	.then ->
+		fs.unlink('ecs.config')
+

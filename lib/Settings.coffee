@@ -1,25 +1,33 @@
-fs = require('fs')
-Promise = require('promise')
+require('es6-shim')
+{wrapApi} = require('./Util.coffee')
+
+fs = wrapApi(require('fs'))
+
 
 CONFIG_FILE = '.mfstack'
 
 remove = ->
-	new Promise (resolve, reject) ->
-		fs.unlink CONFIG_FILE, 'utf8', (err, data) ->
-			if err then return resolve({})
-			resolve(JSON.parse(data))
+	fs.unlink(CONFIG_FILE, 'utf8')
 
 load = ->
-	new Promise (resolve, reject) ->
-		fs.readFile CONFIG_FILE, 'utf8', (err, data) ->
-			if err then return resolve({})
-			resolve(JSON.parse(data))
+	fs.readFile(CONFIG_FILE, 'utf8')
+	.then(JSON.parse)
+	.then (data) ->
+		getDockerCredentials()
+		.then (credentials) ->
+			data.dockerAuth = credentials
+			return data
 
 save = (data) ->
-	new Promise (resolve, reject) ->
-		fs.writeFile CONFIG_FILE, JSON.stringify(data, null, 2), 'utf8', (err, data) ->
-			if err then return reject(err)
-			else resolve()
+	fs.writeFile(CONFIG_FILE, JSON.stringify(data, null, 2))
+
+getDockerCredentials = (repository = 'https://index.docker.io/v1/')->
+	fs.readFile("#{process.env.HOME}/.dockercfg")
+	.then null, ->
+		fs.readFile("#{process.env.HOME}/.docker/config.json")
+	.then(JSON.parse)
+	.then (config) ->
+		config.auths ? config
 
 module.exports = {
 	remove

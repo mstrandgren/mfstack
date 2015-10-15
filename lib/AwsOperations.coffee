@@ -1,12 +1,23 @@
+require('es6-shim')
+fs = require('fs')
+path = require('path')
 _ = require('lodash')
-Promise = require('promise')
+AWS = require('aws-sdk')
 colors = require('colors/safe')
+{wrapPromise, wrapApi} = require('./Util.coffee')
+glob = wrapPromise(require('glob'))
+eventTarget = require('./EventTarget.coffee')()
 
-{cf, ec2, ecs, as} = {}
-
+{as, cf, ec2, ecs, elb, s3} = {}
 
 initAws = (settings) ->
-	{cf, ec2, ecs, as} = require('./AwsWrapped.coffee')(settings)
+	AWS.config = settings
+	ec2 = wrapApi(new AWS.EC2())
+	s3 = wrapApi(new AWS.S3())
+	cf = wrapApi(new AWS.CloudFormation())
+	ecs = wrapApi(new AWS.ECS())
+	as = wrapApi(new AWS.AutoScaling())
+	elb = wrapApi(new AWS.ELB())
 
 createStack = (name, template) ->
 	cf.createStack
@@ -31,20 +42,39 @@ updateStack = (name, template) ->
 		TemplateBody: JSON.stringify(template)
 		StackPolicyDuringUpdateBody: JSON.stringify(stackPolicy)
 
+emptyBucket = (bucket) ->
+	s3.listObjects(Bucket: bucket)
+	.then (results) ->
+		keys = (item.Key for item in results.Contents)
+		console.log "deleting #{keys.join(',')} from #{bucket}"
+		s3.deleteObjects
+			Bucket: bucket
+			Delete:
+				Objects: ({Key: k} for k in keys)
+	.then (result) ->
+		console.log "Deleted files: #{JSON.stringify(result)}"
+	.then null, (e) ->
+		console.log "Error deleting files: #{e}"
+
 deleteStack = (name) ->
 	cf.describeStackResources(StackName: name)
 	.then (data) ->
 		resources = (r.LogicalResourceId for r in data.StackResources)
-
-		cf.deleteStack
-			StackName: name
-		.then (data) ->
-			waitForStack(name, resources, "Deleting stack", /delete/i)
-		.then null, (e) ->
-			if e.statusCode == 400
-				return "Successfully deleted #{name}"
-			else
-				throw e
+		(if 'Bucket' in resources
+			bucket = _.find data.StackResources, (r) -> r.LogicalResourceId == 'Bucket'
+			emptyBucket(bucket.PhysicalResourceId)
+		else
+			Promise.resolve())
+		.then ->
+			cf.deleteStack
+				StackName: name
+			.then (data) ->
+				waitForStack(name, resources, "Deleting stack", /delete/i)
+			.then null, (e) ->
+				if e.statusCode == 400
+					return "Successfully deleted #{name}"
+				else
+					throw e
 
 scaleTo = (stackName, size) ->
 	console.log "Scaling '#{stackName}' to #{size}"
@@ -120,15 +150,45 @@ getIpForInstances = (stackName) ->
 			for ins in res.Instances
 				ins.PublicIpAddress
 
-module.exports = {
-	initAws
+putConfigFiles = (stackName, files, opts) ->
+	put = (file) ->
+		if opts?.log
+			console.log "Uploading #{file}..."
+		s3.putObject
+			ACL: 'private'
+			Bucket: "#{stackName}-config"
+			Key: path.basename(file)
+			Body: fs.createReadStream(file)
 
+
+	if _.isArray(files)
+		return Promise.all(put(file) for file in files)
+
+	glob(files)
+	.then (resolvedFiles) ->
+		putConfigFiles(stackName, resolvedFiles)
+
+
+
+
+getElbPublicDns = (stackName) ->
+	getPhysicalId(stackName, 'Elb')
+	.then (elbName) ->
+		elb.describeLoadBalancers
+			LoadBalancerNames: [elbName]
+	.then (result) ->
+		result.LoadBalancerDescriptions[0].DNSName
+
+module.exports = _.extend eventTarget, {
+	initAws
 	createStack
 	updateStack
 	deleteStack
 	scaleTo
 	redeploy
 	getIpForInstances
+	putConfigFiles
+	getElbPublicDns
 }
 
 # --------------------------------------------------------
@@ -240,6 +300,7 @@ waitForStack = (name, resources, label, statusRegex, interval = 3000) ->
 			resourceStatus[e.name] =
 				status: e.status
 				time: e.timestamp.toLocaleTimeString()
+			eventTarget.dispatchEvent('stackchanged', {resource: e.name, status: e.status})
 
 	printer.print(resources, {})
 
@@ -343,4 +404,5 @@ executeSerially = (callbacks) ->
 	for cb in callbacks[1..]
 		promise = promise.then(cb)
 	return promise
+
 
