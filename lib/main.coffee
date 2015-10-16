@@ -13,17 +13,19 @@ AWS_CONFIG_FILE = 'mfstack.aws.json'
 run = ->
 	[command, args...] = argv._
 
+	if command not in _.keys(COMMANDS)
+		printHelp()
+		return Promise.resolve()
 	if command == 'init'
 		[stackName, image] = args
 		return stack.init(stackName, {image})
 	if command == 'delete'
 		return stack.remove()
 
-	settings.load()
+	settings.load(argv.debug)
 	.then (opts) ->
 		if not opts.image or not opts.stackName
 			throw new Error("No stack found, run  \n\n#{colors.cyan("$ #{scriptName} init")}\n\nto initialize it.")
-
 		try
 			awsConfig = loadAwsConfig(argv['aws-config'])
 			require('./AwsOperations.coffee').initAws(awsConfig)
@@ -66,18 +68,9 @@ printHelp = ->
 	console.log """
 		Usage: mfstack <command> <stackname> [size] [options]
 
-		Available commands:
-			init		Initialize a new stack in this directory (local only)
-			delete		Delete the stack config from this directory (local only)
-			create		Create the stack in AWS
-			destroy		Delete the stack from AWS (WARNING: very destructive, nothing remains)
-			scale		Set the number of containers/instances the stack should have
-			deploy		Redeploy the latest version of the image on the stack
-			ssh			Get a command line to ssh into an instance
-			push		Upload config files to the associated config bucket
-			open		Open the stack url in a web browser
+		Available commands: #{"\n\t#{cmd}\t\t#{description}" for cmd, description of COMMANDS}
 
-			options:
+		options:
 			--aws-config <file>	Load AWS credentials from this file (defaults to mfstack.aws.json)
 			--environment <file> Load environment from this file
 			--debug			More verbose error messages
@@ -107,4 +100,15 @@ module.exports = ->
 		if argv.debug
 			console.log e.stack
 
+COMMANDS =
+	init: 'Initialize a new stack in this directory (local only)'
+	'delete': 'Delete the stack config from this directory (local only)'
+	create: 'Create the stack in AWS'
+	destroy: 'Delete the stack from AWS (WARNING: very destructive, nothing remains)'
+	scale: 'Set the number of containers/instances the stack should have'
+	deploy: 'Redeploy the latest version of the image on the stack'
+	ssh: 'Get a command line to ssh into an instance'
+	push: 'Upload config files to the associated config bucket'
+	open: 'Open the stack url in a web browser'
+	settings: 'View settings for the initialized stack'
 

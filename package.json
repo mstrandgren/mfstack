@@ -1,6 +1,6 @@
 {
   "name": "mfstack",
-  "version": "0.0.3",
+  "version": "0.0.6",
   "main": "./lib/main.coffee",
   "bin": {
     "mfstack": "./bin/mfstack"

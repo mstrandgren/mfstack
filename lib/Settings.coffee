@@ -9,7 +9,7 @@ CONFIG_FILE = '.mfstack'
 remove = ->
 	fs.unlink(CONFIG_FILE, 'utf8')
 
-load = ->
+load = (debug = false) ->
 	fs.readFile(CONFIG_FILE, 'utf8')
 	.then(JSON.parse)
 	.then (data) ->
@@ -17,6 +17,9 @@ load = ->
 		.then (credentials) ->
 			data.dockerAuth = credentials
 			return data
+	.then null, (e) ->
+		if debug then console.log e
+		return {}
 
 save = (data) ->
 	fs.writeFile(CONFIG_FILE, JSON.stringify(data, null, 2))
