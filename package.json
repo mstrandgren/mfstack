@@ -18,10 +18,11 @@
     "glob": "^5.0.15",
     "lodash": "~3.10.0",
     "minimist": "^1.2.0",
+    "mflib": "*",
     "prompt": "^0.2.14"
   },
   "engines": {
-    "node": ">=0.10.0"
+    "node": ">=0.12.0"
   },
   "devDependencies": {
     "grunt": "^0.4.5",

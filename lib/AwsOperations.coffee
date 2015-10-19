@@ -4,9 +4,9 @@ path = require('path')
 _ = require('lodash')
 AWS = require('aws-sdk')
 colors = require('colors/safe')
-{wrapPromise, wrapApi} = require('./Util.coffee')
+{wrapPromise, wrapApi} = require('mflib/ApiWrapper')
 glob = wrapPromise(require('glob'))
-eventTarget = require('./EventTarget.coffee')()
+eventTarget = require('mflib/EventTarget')()
 
 {as, cf, ec2, ecs, elb, s3} = {}
 

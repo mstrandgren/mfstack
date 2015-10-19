@@ -1,14 +1,12 @@
-require('es6-shim')
 _ = require('lodash')
 colors = require('colors/safe')
 prompt = require('prompt')
 path = require('path')
-{wrapApi} = require('./Util.coffee')
+{wrapApi} = require('mflib/ApiWrapper')
 fs = wrapApi(require('fs'))
 settings = require('./Settings.coffee')
 aws = require('./AwsOperations.coffee')
 {createTemplate} = require('./Template.coffee')
-colors = require('colors/safe')
 
 scriptName = path.basename(process.argv[1])
 

@@ -1,4 +1,3 @@
-require('es6-shim')
 AWS = require('aws-sdk')
 
 try

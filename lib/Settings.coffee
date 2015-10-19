@@ -1,5 +1,4 @@
-require('es6-shim')
-{wrapApi} = require('./Util.coffee')
+{wrapApi} = require('mflib/ApiWrapper')
 
 fs = wrapApi(require('fs'))
 

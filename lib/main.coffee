@@ -1,4 +1,3 @@
-require('es6-shim')
 _ = require('lodash')
 colors = require('colors/safe')
 path = require('path')
