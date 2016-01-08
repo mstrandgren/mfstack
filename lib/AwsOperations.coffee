@@ -103,6 +103,46 @@ scaleTo = (stackName, size) ->
 	.then ->
 		console.log("'#{stackName}' is now at #{size}")
 
+scaleVertically = (stackName, size) ->
+	getPhysicalId(stackName, 'ClusterLaunchConfiguration')
+	.then (lcName) ->
+		as.describeLaunchConfigurations()
+		.then (result) ->
+			newLcName = "#{lcName}-#{size}"
+			baseLcConfig = null
+			for lc in result.LaunchConfigurations
+				if lc.LaunchConfigurationName == newLcName
+					console.log "There is a LaunchConfiguration available for #{size}"
+					return newLcName
+				if lc.LaunchConfigurationName == lcName
+					baseLcConfig = lc
+
+			console.log "Creating a LaunchConfiguration for #{size}"
+
+			newLcProps = _.pick(baseLcConfig, [
+				'ImageId'
+				'KeyName'
+				'SecurityGroups'
+				'UserData'
+				'InstanceMonitoring'
+				'IamInstanceProfile'
+				'EbsOptimized'
+				'AssociatePublicIpAddress'
+			])
+			newLcProps.LaunchConfigurationName = newLcName
+			newLcProps.InstanceType = size
+			as.createLaunchConfiguration(newLcProps)
+			.then ->
+				return newLcName
+	.then (lcName) ->
+		getPhysicalId(stackName, 'ClusterAutoScalingGroup')
+		.then (asgName) ->
+			as.updateAutoScalingGroup
+				AutoScalingGroupName: asgName
+				LaunchConfigurationName: lcName
+	.then ->
+		redeploy(stackName)
+
 redeploy = (stackName) ->
 	console.log "Redeploying '#{stackName}'"
 	originalSize = undefined
@@ -185,6 +225,7 @@ module.exports = _.extend eventTarget, {
 	updateStack
 	deleteStack
 	scaleTo
+	scaleVertically
 	redeploy
 	getIpForInstances
 	putConfigFiles

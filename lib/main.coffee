@@ -59,6 +59,11 @@ run = ->
 				throw new Error("A size between 1 and 20 is required")
 			return stack.scale(opts.stackName, size)
 
+		if command == 'scalev'
+			size = args[0]
+			if not size? or size < 1 or size > 20
+				throw new Error("A legal instance size is required")
+			return stack.scaleVertically(opts.stackName, size)
 
 		console.log "Unrecognized command #{command}"
 		printHelp()
@@ -67,7 +72,7 @@ printHelp = ->
 	console.log """
 		Usage: mfstack <command> <stackname> [size] [options]
 
-		Available commands: #{"\n\t#{cmd}\t\t#{description}" for cmd, description of COMMANDS}
+		Available commands: #{("\n\t#{cmd}\t\t#{description}" for cmd, description of COMMANDS).join('')}
 
 		options:
 			--aws-config <file>	Load AWS credentials from this file (defaults to mfstack.aws.json)
@@ -105,9 +110,9 @@ COMMANDS =
 	create: 'Create the stack in AWS'
 	destroy: 'Delete the stack from AWS (WARNING: very destructive, nothing remains)'
 	scale: 'Set the number of containers/instances the stack should have'
+	scalev: 'Set instance size (see http://docs.aws.amazon.com/AWSEC2/latest/UserGuide/instance-types.html#AvailableInstanceTypes)'
 	deploy: 'Redeploy the latest version of the image on the stack'
 	ssh: 'Get a command line to ssh into an instance'
 	push: 'Upload config files to the associated config bucket'
 	open: 'Open the stack url in a web browser'
 	settings: 'View settings for the initialized stack'
-

@@ -75,6 +75,12 @@ scale = (stackName, size) ->
 	.then (result) ->
 		console.log "Stack '#{stackName}' updated"
 
+scaleVertically = (stackName, size) ->
+	aws.scaleVertically(stackName, size)
+	.then (result) ->
+		console.log "Stack '#{stackName}' updated"
+
+
 redeploy = (stackName) ->
 	aws.redeploy(stackName)
 	.then (result) ->
@@ -106,6 +112,7 @@ module.exports = {
 	create
 	destroy
 	scale
+	scaleVertically
 	redeploy
 	sshCommand
 	push
